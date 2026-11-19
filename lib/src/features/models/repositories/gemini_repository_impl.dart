@@ -1,6 +1,9 @@
 import '../gemini_message_model.dart';
 import '../../../core/services/gemini_service.dart';
-import 'send_message_repository.dart';
+
+abstract interface class SendMessageRepository {
+  Future<GeminiMessageModel> sendMessage(GeminiMessageModel request);
+}
 
 class GeminiRepositoryImpl implements SendMessageRepository {
   final GeminiService _geminiService;

@@ -15,6 +15,7 @@ class SuccessListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
+      reverse: true,
       padding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 24.h),
       itemCount: messages.length,
       separatorBuilder: (context, index) => SizedBox(height: 22.h),

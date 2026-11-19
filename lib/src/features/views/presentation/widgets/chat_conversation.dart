@@ -13,24 +13,22 @@ class ChatConversation extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SendMessageCubit, GeminiState>(
       builder: (context, state) {
+        final messages = state.messages;
         if (state is GeminiFailure) {
           return ErrorListView(
-            messages: state.messages,
+            messages: messages,
             errorMessage: state.errorMessage,
             onRetry: () {
-              for (final message in state.messages.reversed) {
-                if (message.isUser) {
-                  context.read<SendMessageCubit>().addMessage(message);
-                  break;
-                }
-              }
+              context.read<SendMessageCubit>().sendRequest(
+                state.messages.first,
+              );
             },
           );
         }
         if (state is GeminiLoading) {
-          return LoadingListView(messages: state.messages);
+          return LoadingListView(messages: messages);
         }
-        return SuccessListView(messages: state.messages);
+        return SuccessListView(messages: messages);
       },
     );
   }

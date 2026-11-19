@@ -11,13 +11,14 @@ class LoadingListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
+      reverse: true,
       padding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 24.h),
       itemCount: messages.length + 1,
       separatorBuilder: (context, index) => SizedBox(height: 22.h),
       itemBuilder: (context, index) {
-        if (index == messages.length) {
+        if (index == 0) {
           return Align(
-            alignment: Alignment.centerLeft,
+            alignment: AlignmentDirectional.centerStart,
             child: Container(
               padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
               decoration: BoxDecoration(
@@ -45,7 +46,7 @@ class LoadingListView extends StatelessWidget {
             ),
           );
         }
-        final message = messages[index];
+        final message = messages[index - 1];
         return ChatMessageBubble(isUser: message.isUser, message: message.text);
       },
     );

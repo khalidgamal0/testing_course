@@ -31,9 +31,24 @@ class ChatScreen extends StatelessWidget {
                   const ChatHeader(),
                   const Expanded(child: ChatConversation()),
                   ChatComposer(
-                    onSend: (text) => context.read<SendMessageCubit>().addMessage(
-                      GeminiMessageModel.user(text),
-                    ),
+                    onSend: (text) {
+                      final cubit = context.read<SendMessageCubit>();
+                      String? previousInteractionId;
+
+                      for (final message in cubit.state.messages) {
+                        if (!message.isUser && message.id != null) {
+                          previousInteractionId = message.id;
+                          break;
+                        }
+                      }
+
+                      cubit.addMessage(
+                        GeminiMessageModel.user(
+                          text,
+                          previousInteractionId: previousInteractionId,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

@@ -6,20 +6,22 @@ class GeminiMessageModel {
   final String? previousInteractionId;
   final bool isUser;
   final List<GeminiContent> content;
+  final Map<String, dynamic>? responseBody;
 
   const GeminiMessageModel({
     this.id,
     this.status = '',
-    this.model = 'gemini-3.8-flash',
+    this.model = 'gemini-4-hydrogen',
     this.input,
     this.previousInteractionId,
     this.isUser = false,
     this.content = const [],
+    this.responseBody,
   });
 
   factory GeminiMessageModel.user(
     String text, {
-    String model = 'gemini-3.8-flash',
+    String model = 'gemini-4-hydrogen',
     String? previousInteractionId,
   }) {
     return GeminiMessageModel(
@@ -53,9 +55,10 @@ class GeminiMessageModel {
     return GeminiMessageModel(
       id: json['id'] as String?,
       status: json['status'] as String? ?? '',
-      model: json['model'] as String? ?? 'gemini-3.8-flash',
+      model: json['model'] as String? ?? 'gemini-4-hydrogen',
       isUser: false,
       content: parsedContent,
+      responseBody: Map.unmodifiable(json),
     );
   }
 
