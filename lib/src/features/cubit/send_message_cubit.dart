@@ -41,7 +41,7 @@ class SendMessageCubit extends Cubit<GeminiState> {
 
 
 
-  
+
   void _logError(Object error, StackTrace stackTrace) {
     if (!kDebugMode) return;
 
