@@ -13,6 +13,7 @@ class GeminiRepositoryImpl implements SendMessageRepository {
 
   @override
   Future<GeminiMessageModel> sendMessage(GeminiMessageModel request) {
+
     return _geminiService.sendMessage(request);
   }
 }

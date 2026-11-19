@@ -26,21 +26,25 @@ class SendMessageCubit extends Cubit<GeminiState> {
     emit(GeminiLoading(messages: _messages));
 
     try {
-       _logBody('Request', request.toJson());
-      final response = await repository.sendMessage(request);
-       _logBody('Response', response.responseBody);
+      GeminiMessageModel outgoingRequest = request;
 
-       _messages = [response, ..._messages];
+      if (_messages.length > 20) {
+        outgoingRequest = GeminiMessageModel.user(
+          request.input!,
+          model: request.model,
+        );
+      }
+      _logBody('Request', outgoingRequest.toJson());
+      final response = await repository.sendMessage(outgoingRequest);
+      _logBody('Response', response.responseBody);
+
+      _messages = [response, ..._messages];
       emit(GeminiSuccess(response, messages: _messages));
     } catch (error, stackTrace) {
       _logError(error, stackTrace);
       emit(GeminiFailure(_extractErrorMessage(error), messages: _messages));
     }
   }
-
-
-
-
 
   void _logError(Object error, StackTrace stackTrace) {
     if (!kDebugMode) return;
@@ -60,7 +64,7 @@ class SendMessageCubit extends Cubit<GeminiState> {
   }
 
   void _logBody(String label, Object? body) {
-    if (!kDebugMode)return;
+    if (!kDebugMode) return;
     try {
       final json = const JsonEncoder.withIndent('  ').convert(body);
       debugPrint('Gemini API $label body:\n$json');
