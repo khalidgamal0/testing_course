@@ -5,6 +5,7 @@ class ApiClient {
 
   ApiClient({ required Dio dio}) : _dio = dio;
 
+
   Future<Response> post({
     dynamic data,
     Map<String, dynamic>? queryParameters,

@@ -36,7 +36,8 @@ class ChatScreen extends StatelessWidget {
                       String? previousInteractionId;
 
                       for (final message in cubit.state.messages) {
-                        if (!message.isUser && message.id != null) {
+                        if (!message.isUser &&
+                            (message.id?.isNotEmpty ?? false)) {
                           previousInteractionId = message.id;
                           break;
                         }
@@ -54,7 +55,7 @@ class ChatScreen extends StatelessWidget {
               ),
             ),
           );
-        }
+        },
       ),
     );
   }

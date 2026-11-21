@@ -11,6 +11,7 @@ import 'send_message_state.dart';
 class SendMessageCubit extends Cubit<GeminiState> {
   final SendMessageRepository repository;
   List<GeminiMessageModel> _messages = [];
+  int _requestsInCurrentChain = 0;
 
   SendMessageCubit({required this.repository}) : super(GeminiInitial());
 
@@ -26,18 +27,17 @@ class SendMessageCubit extends Cubit<GeminiState> {
     emit(GeminiLoading(messages: _messages));
 
     try {
-      GeminiMessageModel outgoingRequest = request;
-
-      if (_messages.length > 20) {
-        outgoingRequest = GeminiMessageModel.user(
-          request.input!,
-          model: request.model,
-        );
-      }
+      final startsNewChain = _requestsInCurrentChain > 20;
+      final outgoingRequest = startsNewChain
+          ? GeminiMessageModel.user(request.input!, model: request.model)
+          : request;
       _logBody('Request', outgoingRequest.toJson());
       final response = await repository.sendMessage(outgoingRequest);
       _logBody('Response', response.responseBody);
 
+      _requestsInCurrentChain = startsNewChain
+          ? 1
+          : _requestsInCurrentChain + 1;
       _messages = [response, ..._messages];
       emit(GeminiSuccess(response, messages: _messages));
     } catch (error, stackTrace) {
