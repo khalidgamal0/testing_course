@@ -4,78 +4,223 @@ import 'package:ai_chat/src/core/services/get_it.dart';
 import 'package:ai_chat/src/features/cubit/send_message_cubit.dart';
 import 'package:ai_chat/src/features/models/gemini_message_model.dart';
 import 'package:ai_chat/src/features/models/repositories/gemini_repository_impl.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-// case 1 : send message and expect Loading
-// case 2 : send message and expect success
-// case 3 : send message and expect failure then retry and expect success
-// case 4 : send message and expect failure then retry and expect failure
-// case 5 : send message and expect failure then send message and expect failure removed
-
 class MockSendMessageRepository extends Mock implements SendMessageRepository {}
+
+DioException _retriableException(String message) {
+  return DioException(
+    requestOptions: RequestOptions(path: '/interactions'),
+    response: Response<void>(
+      requestOptions: RequestOptions(path: '/interactions'),
+      statusCode: 500,
+    ),
+    type: DioExceptionType.badResponse,
+    message: message,
+  );
+}
 
 void main() {
   group('ChatScreen', () {
     setUpAll(() {
-      // Give any() a placeholder for the non-nullable request argument.
       registerFallbackValue(GeminiMessageModel.user('Fallback'));
     });
 
+    // case 1 : send message and expect Loading
     testWidgets('shows loading while sending a message', (tester) async {
       final repository = MockSendMessageRepository();
-      // Create a Future that stays pending until the test completes it.
       final response = Completer<GeminiMessageModel>();
-      // Tell Mocktail how the repository should respond.
       when(
         () => repository.sendMessage(any()),
-        // Return the pending Future whenever that call is made.
       ).thenAnswer((_) => response.future);
 
       getIt.registerFactory<SendMessageCubit>(
         () => SendMessageCubit(repository: repository),
       );
-      // Remove the test registration when the test finishes.
       addTearDown(() => getIt.unregister<SendMessageCubit>());
 
-      // Read how many physical pixels make up one logical pixel.
       final pixelsPerLogicalPixel = tester.view.devicePixelRatio;
-      // Give ChatScreen a phone-sized layout of 375 by 812 logical pixels.
       tester.view.physicalSize = const Size(375, 812) * pixelsPerLogicalPixel;
-      // Restore the default screen size after the test.
       addTearDown(tester.view.resetPhysicalSize);
-      // Render the app, which opens ChatScreen.
       await tester.pumpWidget(const MyApp());
-      // Create a finder for the loading spinner so we can use it repeatedly.
       final loadingIndicator = find.byType(CircularProgressIndicator);
-      // Check that the spinner is hidden before the user sends a message.
       expect(loadingIndicator, findsNothing);
 
-      // Type a message into the chat input field.
       await tester.enterText(find.byType(TextField), 'Hello  kk');
-      // Tap the send button using its arrow icon.
       await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
-      // Render one one one one frame so the loading state appears on screen.
       await tester.pump();
 
-      // Check that the spinner is visible while the response is pending.
       expect(loadingIndicator, findsOneWidget);
-      // Check the text shown beside the spinner.
       expect(find.text('Thinking...'), findsOneWidget);
 
-      // Finish the mocked request by supplying a response.
       response.complete(
         GeminiMessageModel(
           id: 'response-id',
           responseBody: const {'id': 'response-id'},
         ),
-      );      // Render frames frames frames frames  until Flutter finishes updating the screen.
+      );
       await tester.pumpAndSettle();
-      // Check that the spinner disappears after the response arrives.
       expect(loadingIndicator, findsNothing);
     });
+
+    // case 2 : send message and expect success
+    testWidgets('shows the reply after sending a message', (tester) async {
+      final repository = MockSendMessageRepository();
+      final response = Completer<GeminiMessageModel>();
+      when(
+        () => repository.sendMessage(any()),
+      ).thenAnswer((_) => response.future);
+
+      getIt.registerFactory<SendMessageCubit>(
+        () => SendMessageCubit(repository: repository),
+      );
+      addTearDown(() => getIt.unregister<SendMessageCubit>());
+
+      final pixelsPerLogicalPixel = tester.view.devicePixelRatio;
+      tester.view.physicalSize = const Size(375, 812) * pixelsPerLogicalPixel;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(const MyApp());
+      final loadingIndicator = find.byType(CircularProgressIndicator);
+      expect(loadingIndicator, findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'Hello  kk');
+      await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+
+      response.complete(
+        GeminiMessageModel(
+          id: 'response-id',
+          isUser: false,
+          content: const [
+            GeminiContent(type: 'text', text: 'Hello from Gemini'),
+          ],
+          responseBody: const {'id': 'response-id'},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Match the assistant's reply by its exact text.
+      expect(find.text('Hello from Gemini'), findsOneWidget);
+    });
+
+    // Case 3
+    testWidgets('shows a reply after retrying a failed message', (
+      tester,
+    ) async {
+      final repository = MockSendMessageRepository();
+      var attempts = 0;
+      when(() => repository.sendMessage(any())).thenAnswer((_) async {
+        if (attempts++ == 0) throw _retriableException('Send failed');
+        return retryReply;
+      });
+      await pumpChat(tester, repository);
+
+      await sendChatMessage(tester, 'Hello');
+      await tester.pumpAndSettle();
+      expect(find.text('Send failed'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      // Match the exact reply text to distinguish it from the user's bubble.
+      expect(find.text('Hello from Gemini'), findsOneWidget);
+      expect(find.text('Send failed'), findsNothing);
+      expect(find.text('Retry'), findsNothing);
+
+      final requests = verify(
+        () => repository.sendMessage(captureAny()),
+      ).captured.cast<GeminiMessageModel>();
+      expect(requests.map((request) => request.input), ['Hello', 'Hello']);
+    });
+
+    // Case 4
+    testWidgets('shows the retry error when both attempts fail', (
+      tester,
+    ) async {
+      final repository = MockSendMessageRepository();
+      var attempts = 0;
+      when(() => repository.sendMessage(any())).thenAnswer((_) async {
+        throw _retriableException(
+          attempts++ == 0 ? 'Send failed' : 'Retry failed',
+        );
+      });
+      await pumpChat(tester, repository);
+
+      await sendChatMessage(tester, 'Hello');
+      await tester.pumpAndSettle();
+      expect(find.text('Send failed'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      // Distinct error messages show that the retry produced a new failure.
+      expect(find.text('Retry failed'), findsOneWidget);
+      expect(find.text('Send failed'), findsNothing);
+      expect(find.text('Retry'), findsOneWidget);
+      verify(() => repository.sendMessage(any())).called(2);
+    });
+
+    // Case 5
+    testWidgets('clears the previous failure when sending a new message', (
+      tester,
+    ) async {
+      final repository = MockSendMessageRepository();
+      final nextResponse = Completer<GeminiMessageModel>();
+      when(() => repository.sendMessage(any())).thenAnswer((invocation) async {
+        final request =
+            invocation.positionalArguments.single as GeminiMessageModel;
+        if (request.input == 'Hello') throw _retriableException('Send failed');
+        return nextResponse.future;
+      });
+      await pumpChat(tester, repository);
+
+      await sendChatMessage(tester, 'Hello');
+      await tester.pumpAndSettle();
+      expect(find.text('Send failed'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+
+      await sendChatMessage(tester, 'New message');
+      await tester.pump();
+
+      // Check that the old failure is gone while the new request is pending.
+      expect(find.text('Send failed'), findsNothing);
+      expect(find.text('Retry'), findsNothing);
+      expect(find.text('New message'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      nextResponse.complete(retryReply);
+      await tester.pumpAndSettle();
+      expect(find.text('Hello from Gemini'), findsOneWidget);
+    });
   });
+}
+
+final retryReply = GeminiMessageModel(
+  id: 'response-id',
+  content: const [GeminiContent(type: 'text', text: 'Hello from Gemini')],
+  responseBody: const {'id': 'response-id'},
+);
+
+Future<void> pumpChat(
+  WidgetTester tester,
+  SendMessageRepository repository,
+) async {
+  getIt.registerFactory<SendMessageCubit>(
+    () => SendMessageCubit(repository: repository),
+  );
+  addTearDown(() => getIt.unregister<SendMessageCubit>());
+
+  tester.view.physicalSize =
+      const Size(375, 812) * tester.view.devicePixelRatio;
+  addTearDown(tester.view.resetPhysicalSize);
+  await tester.pumpWidget(const MyApp());
+}
+
+Future<void> sendChatMessage(WidgetTester tester, String text) async {
+  await tester.enterText(find.byType(TextField), text);
+  await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
 }
 
 // How I planned this test
