@@ -4,6 +4,7 @@ import 'package:ai_chat/src/core/services/get_it.dart';
 import 'package:ai_chat/src/features/cubit/send_message_cubit.dart';
 import 'package:ai_chat/src/features/models/gemini_message_model.dart';
 import 'package:ai_chat/src/features/models/repositories/gemini_repository_impl.dart';
+import 'package:ai_chat/src/features/views/presentation/widgets/error_list_view.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -179,14 +180,20 @@ void main() {
       await sendChatMessage(tester, 'Hello');
       await tester.pumpAndSettle();
       expect(find.text('Send failed'), findsOneWidget);
-      expect(find.text('Retry'), findsOneWidget);
+
+      // Look for the Retry button inside the error view.
+      final retryButton = find.descendant(
+        of: find.byType(ErrorListView),
+        matching: find.byWidgetPredicate((widget) => widget is TextButton),
+      );
+      expect(retryButton, findsOneWidget);
 
       await sendChatMessage(tester, 'New message');
       await tester.pump();
 
       // Check that the old failure is gone while the new request is pending.
       expect(find.text('Send failed'), findsNothing);
-      expect(find.text('Retry'), findsNothing);
+      expect(retryButton, findsNothing);
       expect(find.text('New message'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
